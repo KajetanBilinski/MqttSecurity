@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/SampleBroker/SampleBroker.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/MqttSecurity.Core/MqttSecurity.Core.csproj" />
+    <Project Path="src/MqttSecurity.MqttNet/MqttSecurity.MqttNet.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MqttSecurity.Tests/MqttSecurity.Tests.csproj" />
+  </Folder>
+</Solution>

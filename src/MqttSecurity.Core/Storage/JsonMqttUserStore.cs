@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MqttSecurity.Core.Contracts;
 using MqttSecurity.Core.Enums;
 using MqttSecurity.Core.Models;
+using MqttSecurity.Core.Validation;
 
 namespace MqttSecurity.Core.Storage;
 
@@ -13,7 +14,7 @@ public class JsonMqttUserStore : IMqttUserStore
     {
         Converters = { new JsonStringEnumConverter<MqttAction>() }
     };
-
+    private readonly SemaphoreSlim _reloadLock = new(1, 1);
     private Dictionary<string, MqttUser> _users = new();
     private readonly string _filePath;
 
@@ -24,38 +25,56 @@ public class JsonMqttUserStore : IMqttUserStore
     }
     public bool Exists(string? username)
     {
-        return !string.IsNullOrWhiteSpace(username)
-            && _users.ContainsKey(username);
+        if (string.IsNullOrWhiteSpace(username)) return false;
+
+        var users = Volatile.Read(ref _users);
+
+        return users.ContainsKey(username);
     }
 
     public MqttUser? GetUser(string? username)
     {
         if (string.IsNullOrWhiteSpace(username)) return null;
 
-        return _users.GetValueOrDefault(username);
+        var users = Volatile.Read(ref _users);
+
+        return users.GetValueOrDefault(username);
     }
 
     public IReadOnlyList<MqttUser> GetAllUsers()
     {
-        return _users.Values.ToList();
+        var users = Volatile.Read(ref _users);
+        return users.Values.ToList();
     }
 
-    public async Task ReloadAsync(CancellationToken cancellationToken = default)
+    public async Task ReloadAsync(
+        CancellationToken cancellationToken = default)
     {
-        var json = await File.ReadAllTextAsync(
-            _filePath,
-            cancellationToken);
+        await _reloadLock.WaitAsync(cancellationToken);
 
-        var users = JsonSerializer.Deserialize<List<MqttUser>>(
-            json, Options);
+        try
+        {
+            var json = await File.ReadAllTextAsync(
+                _filePath,
+                cancellationToken);
 
-        if (users is null)
-            throw new InvalidDataException("Invalid users configuration.");
+            var users = JsonSerializer.Deserialize<List<MqttUser>>(
+                json, Options);
 
-        var dictionary = users.ToDictionary(
-            user => user.Username,
-            StringComparer.Ordinal);
 
-        _users = dictionary;
+            if (users is null)
+                throw new InvalidDataException(
+                    "Invalid users configuration.");
+
+            MqttUserConfigurationValidator.Validate(users);
+
+            var dictionary = users.ToDictionary(u => u.Username, u => u);
+
+            Volatile.Write(ref _users, dictionary);
+        }
+        finally
+        {
+            _reloadLock.Release();
+        }
     }
 }

@@ -1,4 +1,6 @@
 ﻿using MqttSecurity.Core.Contracts;
+using MqttSecurity.Core.Validation;
+using static System.Net.WebRequestMethods;
 
 namespace MqttSecurity.Core.Authorization;
 
@@ -8,16 +10,12 @@ public class MqttTopicMatcher : IMqttTopicMatcher
         string allowedFilter,
         string requestedFilter)
     {
-        if (!IsValidFilter(allowedFilter) ||
-            !IsValidFilter(requestedFilter))
+        if (!MqttTopicValidator.IsValidFilter(allowedFilter) ||
+            !MqttTopicValidator.IsValidFilter(requestedFilter))
             return false;
 
         var allowed = allowedFilter.Split('/');
         var requested = requestedFilter.Split('/');
-
-        if (requested[0].StartsWith('$') &&
-            (allowed[0] is "+" or "#"))
-            return false;
 
         if (allowedFilter == "+/#" && requestedFilter == "#")
             return true;
@@ -48,15 +46,12 @@ public class MqttTopicMatcher : IMqttTopicMatcher
 
     public bool Matches(string topic, string filter)
     {
-        if (!IsValidTopic(topic) || !IsValidFilter(filter))
+        if (!MqttTopicValidator.IsValidTopic(topic) ||
+            !MqttTopicValidator.IsValidFilter(filter))
             return false;
 
         var topicLevels = topic.Split('/');
         var filterLevels = filter.Split('/');
-
-        if (topic.StartsWith('$') &&
-            (filterLevels[0] is "+" or "#"))
-            return false;
 
         for (int i = 0; i < topicLevels.Length; i++)
         {
@@ -81,37 +76,6 @@ public class MqttTopicMatcher : IMqttTopicMatcher
         return filterLevels.Length == topicLevels.Length ||
                (filterLevels.Length == topicLevels.Length + 1 &&
                 filterLevels[^1] == "#");
-    }
-    private static bool IsValidTopic(string? topic)
-    {
-        return !string.IsNullOrEmpty(topic) &&
-               !topic.Contains('\0') &&
-               !topic.Contains('+') &&
-               !topic.Contains('#');
-    }
-
-    private static bool IsValidFilter(string? filter)
-    {
-        if (string.IsNullOrEmpty(filter) ||
-            filter.Contains('\0') ||
-            filter.StartsWith("$share/", StringComparison.Ordinal))
-            return false;
-
-        var levels = filter.Split('/');
-
-        for (int i = 0; i < levels.Length; i++)
-        {
-            var level = levels[i];
-
-            if (level.Contains('#') &&
-                (level != "#" || i != levels.Length - 1))
-                return false;
-
-            if (level.Contains('+') && level != "+")
-                return false;
-        }
-
-        return true;
     }
 
 }

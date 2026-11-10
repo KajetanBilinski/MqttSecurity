@@ -7,7 +7,7 @@ using MqttSecurity.Core.Models;
 
 namespace MqttSecurity.Core.Storage;
 
-internal class JsonMqttUserStore : IMqttUserStore
+public class JsonMqttUserStore : IMqttUserStore
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {

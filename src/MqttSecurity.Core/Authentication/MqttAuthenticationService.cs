@@ -2,7 +2,7 @@
 
 namespace MqttSecurity.Core.Authentication;
 
-internal class MqttAuthenticationService : IMqttAuthenticationService
+public class MqttAuthenticationService : IMqttAuthenticationService
 {
     private readonly IMqttUserStore _userStore;
     private readonly IPasswordHasher _passwordHasher;

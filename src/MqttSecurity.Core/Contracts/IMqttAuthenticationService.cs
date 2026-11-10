@@ -1,6 +1,6 @@
 ﻿namespace MqttSecurity.Core.Contracts;
 
-internal interface IMqttAuthenticationService
+public interface IMqttAuthenticationService
 {
     bool Authenticate(string username, string password);
 }

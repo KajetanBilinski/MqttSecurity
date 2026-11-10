@@ -1,7 +1,7 @@
 ﻿namespace MqttSecurity.Core.Enums;
 
 [Flags]
-internal enum MqttAction
+public enum MqttAction
 {
     Subscribe = 0, 
     Publish = 1, 

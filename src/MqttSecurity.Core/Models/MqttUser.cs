@@ -2,7 +2,7 @@
 
 namespace MqttSecurity.Core.Models;
 
-internal sealed class MqttUser
+public sealed class MqttUser
 {
     public required string Username { get; init; }
     public required string PasswordHash { get; init; }

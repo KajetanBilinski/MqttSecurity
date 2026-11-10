@@ -2,7 +2,7 @@
 
 namespace MqttSecurity.Core.Contracts;
 
-internal interface IMqttUserStore
+public interface IMqttUserStore
 {
     MqttUser? GetUser(string username);
     IReadOnlyList<MqttUser> GetAllUsers();

@@ -3,7 +3,7 @@ using MqttSecurity.Core.Contracts;
 
 namespace MqttSecurity.Core.Authentication;
 
-internal class MqttPasswordHasher : IPasswordHasher
+public class MqttPasswordHasher : IPasswordHasher
 {
     private readonly PasswordHasher<object> _passwordHasher;
     private readonly object _contextUser;

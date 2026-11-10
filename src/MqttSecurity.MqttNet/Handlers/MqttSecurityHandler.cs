@@ -42,11 +42,6 @@ public sealed class MqttSecurityHandler
                 context.UserName,
                 context.ApplicationMessage.Topic);
 
-            Console.WriteLine(
-                $"[PUBLISH] User={context.UserName}, " +
-                $"Topic={context.ApplicationMessage.Topic}, " +
-                $"Allowed={allowed}");
-
             if (!allowed)
             {
                 context.ProcessPublish = false;
@@ -62,11 +57,6 @@ public sealed class MqttSecurityHandler
             bool allowed = _authorization.CanSubscribe(
                 context.UserName,
                 context.TopicFilter.Topic);
-
-            Console.WriteLine(
-                $"[SUBSCRIBE] User={context.UserName}, " +
-                $"Filter={context.TopicFilter.Topic}, " +
-                $"Allowed={allowed}");
 
             if (!allowed)
             {

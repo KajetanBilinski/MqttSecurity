@@ -35,6 +35,6 @@ public class MqttAuthorizationService : IMqttAuthorizationService
 
         if (user is null) return false;
 
-        return user.Rules.Any(r => r.Action.HasFlag(MqttAction.Subscribe) && _topicMatcher.Matches(topicFilter, r.TopicFilter));
+        return user.Rules.Any(r => r.Action.HasFlag(MqttAction.Subscribe) && _topicMatcher.CoversFilter(topicFilter, r.TopicFilter));
     }
 }

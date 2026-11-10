@@ -15,12 +15,10 @@ public class MqttTopicMatcher : IMqttTopicMatcher
         var allowed = allowedFilter.Split('/');
         var requested = requestedFilter.Split('/');
 
-        // Wildcard nie obejmuje topiców zaczynających się od $
         if (requested[0].StartsWith('$') &&
             (allowed[0] is "+" or "#"))
             return false;
 
-        // Równoważne zakresy dla poprawnych topiców MQTT
         if (allowedFilter == "+/#" && requestedFilter == "#")
             return true;
 
@@ -56,7 +54,6 @@ public class MqttTopicMatcher : IMqttTopicMatcher
         var topicLevels = topic.Split('/');
         var filterLevels = filter.Split('/');
 
-        // Wildcard na początku nie obejmuje topiców systemowych
         if (topic.StartsWith('$') &&
             (filterLevels[0] is "+" or "#"))
             return false;

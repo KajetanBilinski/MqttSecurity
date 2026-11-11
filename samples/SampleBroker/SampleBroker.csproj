@@ -2,7 +2,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MqttSecurity.MqttNet\MqttSecurity.MqttNet.csproj" />
+    <ProjectReference Include="..\..\src\MqttSecurity.Core\MqttSecurity.Core.csproj" />
   </ItemGroup>
+
+	<ItemGroup>
+		<None Update="users.json"
+			  CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>

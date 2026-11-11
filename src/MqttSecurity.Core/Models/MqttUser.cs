@@ -9,6 +9,8 @@ public sealed class MqttUser
     public required string Username { get; init; }
     [JsonPropertyName("passwordHash")]
     public required string PasswordHash { get; init; }
+    [JsonPropertyName("clientIds")]
+    public List<string> ClientIds { get; init; } = [];
     [JsonPropertyName("permissions")]
     public MqttPermissions Permissions { get; init; } = new MqttPermissions();
 }

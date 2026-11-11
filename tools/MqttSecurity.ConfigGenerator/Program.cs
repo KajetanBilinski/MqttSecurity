@@ -20,6 +20,8 @@ try
         .AddMqttSecurity(options =>
         {
             options.UsersFilePath = outputPath;
+            options.EnableClientIdBinding = true;
+            options.PendingLifetime = TimeSpan.FromMinutes(1);
         })
         .BuildServiceProvider();
 

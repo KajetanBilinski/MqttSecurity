@@ -31,17 +31,15 @@ public static class MqttSecurityServiceCollectionExtensions
             return new JsonMqttUserStore(options.UsersFilePath);
         });
 
-        services.AddSingleton<
-            IPasswordHasher, MqttPasswordHasher>();
+        services.AddSingleton<IPasswordHasher, MqttPasswordHasher>();
 
-        services.AddSingleton<
-            IMqttAuthenticationService, MqttAuthenticationService>();
+        services.AddSingleton<IMqttAuthenticationService, MqttAuthenticationService>();
 
-        services.AddSingleton<
-            IMqttAuthorizationService, MqttAuthorizationService>();
+        services.AddSingleton<IMqttAuthorizationService, MqttAuthorizationService>();
 
-        services.AddSingleton<
-            IMqttTopicMatcher, MqttTopicMatcher>();
+        services.AddSingleton<IMqttTopicMatcher, MqttTopicMatcher>();
+
+        services.AddSingleton<IMqttClientIdBindingService,MqttClientIdBindingService>();
 
         return services;
     }

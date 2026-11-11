@@ -1,9 +1,8 @@
-﻿using MqttSecurity.Core.Enums;
-using MqttSecurity.Core.Models;
+﻿using MqttSecurity.Core.Models;
 
 namespace MqttSecurity.Core.Validation;
 
-internal static class MqttUserConfigurationValidator
+public static class MqttUserConfigurationValidator
 {
     public static void Validate(IEnumerable<MqttUser> users)
     {

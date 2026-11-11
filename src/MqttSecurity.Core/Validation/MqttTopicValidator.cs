@@ -1,6 +1,6 @@
 ﻿namespace MqttSecurity.Core.Validation;
 
-internal static class MqttTopicValidator
+public static class MqttTopicValidator
 {
     public static bool IsValidTopic(string? topic)
     {
@@ -14,22 +14,31 @@ internal static class MqttTopicValidator
     public static bool IsValidFilter(string? filter)
     {
         if (string.IsNullOrEmpty(filter) ||
-            filter.StartsWith('$') ||
-            filter.Contains('\0'))
+            filter.StartsWith('$'))
             return false;
 
-        var levels = filter.Split('/');
+        ReadOnlySpan<char> span = filter.AsSpan();
 
-        for (int i = 0; i < levels.Length; i++)
+        for (int i = 0; i < span.Length; i++)
         {
-            var level = levels[i];
+            char current = span[i];
 
-            if (level.Contains('#') &&
-                (level != "#" || i != levels.Length - 1))
+            if (current == '\0')
                 return false;
 
-            if (level.Contains('+') && level != "+")
-                return false;
+            if (current == '#')
+            {
+                if (i != span.Length - 1 ||
+                    (i > 0 && span[i - 1] != '/'))
+                    return false;
+            }
+
+            if (current == '+')
+            {
+                if ((i > 0 && span[i - 1] != '/') ||
+                    (i < span.Length - 1 && span[i + 1] != '/'))
+                    return false;
+            }
         }
 
         return true;

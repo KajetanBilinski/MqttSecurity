@@ -1,47 +1,59 @@
 ﻿using MqttSecurity.Core.Contracts;
 using MqttSecurity.Core.Validation;
-using static System.Net.WebRequestMethods;
 
 namespace MqttSecurity.Core.Authorization;
 
 public class MqttTopicMatcher : IMqttTopicMatcher
 {
-    public bool CoversFilter(
-        string allowedFilter,
-        string requestedFilter)
+    public bool CoversFilter(string allowedFilter,string requestedFilter)
     {
         if (!MqttTopicValidator.IsValidFilter(allowedFilter) ||
             !MqttTopicValidator.IsValidFilter(requestedFilter))
             return false;
 
-        var allowed = allowedFilter.Split('/');
-        var requested = requestedFilter.Split('/');
-
         if (allowedFilter == "+/#" && requestedFilter == "#")
             return true;
 
-        for (int i = 0; i < requested.Length; i++)
+        ReadOnlySpan<char> allowed = allowedFilter.AsSpan();
+        ReadOnlySpan<char> requested = requestedFilter.AsSpan();
+
+        while (true)
         {
-            if (i >= allowed.Length)
-                return false;
+            int allowedIndex = allowed.IndexOf('/');
+            int requestedIndex = requested.IndexOf('/');
 
-            var a = allowed[i];
-            var r = requested[i];
+            var allowedLevel = allowedIndex < 0
+                ? allowed
+                : allowed[..allowedIndex];
 
-            if (a == "#")
+            var requestedLevel = requestedIndex < 0
+                ? requested
+                : requested[..requestedIndex];
+
+            if (allowedLevel.SequenceEqual("#"))
                 return true;
 
-            if (r == "#")
+            if (requestedLevel.SequenceEqual("#"))
                 return false;
 
-            if (a != "+" &&
-                !string.Equals(a, r, StringComparison.Ordinal))
+            if (!allowedLevel.SequenceEqual("+") &&
+                (requestedLevel.SequenceEqual("+") ||
+                 !allowedLevel.SequenceEqual(requestedLevel)))
                 return false;
+
+            if (requestedIndex < 0)
+            {
+                return allowedIndex < 0 ||
+                       allowed[(allowedIndex + 1)..]
+                           .SequenceEqual("#");
+            }
+
+            if (allowedIndex < 0)
+                return false;
+
+            allowed = allowed[(allowedIndex + 1)..];
+            requested = requested[(requestedIndex + 1)..];
         }
-
-        return allowed.Length == requested.Length ||
-               (allowed.Length == requested.Length + 1 &&
-                allowed[^1] == "#");
     }
 
     public bool Matches(string topic, string filter)
@@ -50,32 +62,42 @@ public class MqttTopicMatcher : IMqttTopicMatcher
             !MqttTopicValidator.IsValidFilter(filter))
             return false;
 
-        var topicLevels = topic.Split('/');
-        var filterLevels = filter.Split('/');
+        ReadOnlySpan<char> topicSpan = topic.AsSpan();
+        ReadOnlySpan<char> filterSpan = filter.AsSpan();
 
-        for (int i = 0; i < topicLevels.Length; i++)
+        while (true)
         {
-            if (i >= filterLevels.Length)
-                return false;
+            int topicIndex = topicSpan.IndexOf('/');
+            int filterIndex = filterSpan.IndexOf('/');
 
-            var current = filterLevels[i];
+            var topicLevel = topicIndex < 0
+                ? topicSpan
+                : topicSpan[..topicIndex];
 
-            if (current == "#")
+            var filterLevel = filterIndex < 0
+                ? filterSpan
+                : filterSpan[..filterIndex];
+
+            if (filterLevel.SequenceEqual("#"))
                 return true;
 
-            if (current == "+")
-                continue;
-
-            if (!string.Equals(
-                    current,
-                    topicLevels[i],
-                    StringComparison.Ordinal))
+            if (!filterLevel.SequenceEqual("+") &&
+                !filterLevel.SequenceEqual(topicLevel))
                 return false;
-        }
 
-        return filterLevels.Length == topicLevels.Length ||
-               (filterLevels.Length == topicLevels.Length + 1 &&
-                filterLevels[^1] == "#");
+            if (topicIndex < 0)
+            {
+                return filterIndex < 0 ||
+                       filterSpan[(filterIndex + 1)..]
+                           .SequenceEqual("#");
+            }
+
+            if (filterIndex < 0)
+                return false;
+
+            topicSpan = topicSpan[(topicIndex + 1)..];
+            filterSpan = filterSpan[(filterIndex + 1)..];
+        }
     }
 
 }

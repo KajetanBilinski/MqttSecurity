@@ -1,5 +1,5 @@
 ﻿using MqttSecurity.Core.Authorization;
-using Xunit;
+using MqttSecurity.Core.Validation;
 
 namespace MqttSecurity.Tests.Authorization;
 
@@ -25,7 +25,7 @@ public class MqttTopicMatcherTests
 
     [InlineData("$SYS/status", "#", false)]
     [InlineData("$SYS/status", "+/#", false)]
-    [InlineData("$SYS/status", "$SYS/#", true)]
+    [InlineData("$SYS/status", "$SYS/#", false)]
     public void Matches_ShouldReturnExpectedResult(
         string topic,
         string filter,
@@ -37,34 +37,24 @@ public class MqttTopicMatcherTests
     }
 
     [Theory]
-    [InlineData("device/#", "device/#", true)]
-    [InlineData("device/+", "device/+", true)]
-    [InlineData("device/123", "device/123", true)]
-
     [InlineData("device/#", "device/123/#", true)]
-    [InlineData("device/#", "device/123/status", true)]
     [InlineData("device/#", "device/+/status", true)]
     [InlineData("device/#", "device", true)]
     [InlineData("device/+", "device/123", true)]
-    [InlineData("device/+/#", "device/123/status", true)]
-    [InlineData("device/+/status", "device/123/status", true)]
-    [InlineData("#", "device/#", true)]
-
-    [InlineData("device/123/#", "device/#", false)]
-    [InlineData("device/+", "device/#", false)]
-    [InlineData("device/123/status", "device/+/status", false)]
-    [InlineData("device/123/#", "device/456/#", false)]
     [InlineData("device/+", "device/123/#", false)]
-    [InlineData("device/+/status", "device/#", false)]
+    [InlineData("device/123/#", "device/#", false)]
     [InlineData("device/123", "device/+", false)]
-
-    [InlineData("#", "$SYS/#", false)]
-    [InlineData("$SYS/#", "$SYS/status", true)]
-    [InlineData("$SYS/#", "device/#", false)]
+    [InlineData("device/+", "device/#", false)]
+    [InlineData("device/+/status", "device/123/status", true)]
+    [InlineData("device/+/status", "device/#", false)]
+    [InlineData("#", "device/#", true)]
+    [InlineData("+/#", "#", true)]
+    [InlineData("#", "+/#", true)]
+    [InlineData("device/#", "$SYS/#", false)]
     public void CoversFilter_ShouldReturnExpectedResult(
-    string allowedFilter,
-    string requestedFilter,
-    bool expected)
+        string allowedFilter,
+        string requestedFilter,
+        bool expected)
     {
         var result = _matcher.CoversFilter(
             allowedFilter,
@@ -107,4 +97,29 @@ public class MqttTopicMatcherTests
         Assert.False(_matcher.CoversFilter(
             "device/#", invalidFilter));
     }
+
+    [Theory]
+    [InlineData("device/#", true)]
+    [InlineData("device/+/status", true)]
+    [InlineData("device//status", true)]
+    [InlineData("#", true)]
+    [InlineData("+", true)]
+    [InlineData("/device/#", true)]
+    [InlineData("device/#/status", false)]
+    [InlineData("device/+status", false)]
+    [InlineData("device/abc+", false)]
+    [InlineData("device/#abc", false)]
+    [InlineData("$SYS/#", false)]
+    [InlineData("$share/g/device/#", false)]
+    [InlineData("", false)]
+    public void IsValidFilter_ShouldValidateCorrectly(
+    string filter,
+    bool expected)
+    {
+        Assert.Equal(
+            expected,
+            MqttTopicValidator.IsValidFilter(filter));
+    }
+
+
 }

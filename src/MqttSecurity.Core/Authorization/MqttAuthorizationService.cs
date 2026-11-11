@@ -37,4 +37,5 @@ public class MqttAuthorizationService : IMqttAuthorizationService
 
         return user.Rules.Any(r => r.Action.HasFlag(MqttAction.Subscribe) && _topicMatcher.CoversFilter(topicFilter, r.TopicFilter));
     }
+
 }

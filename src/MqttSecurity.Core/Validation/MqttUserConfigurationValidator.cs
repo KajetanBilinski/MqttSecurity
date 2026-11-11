@@ -37,7 +37,7 @@ public static class MqttUserConfigurationValidator
                     throw new InvalidDataException(
                         $"Null topic: {user.Username}");
 
-                if (!MqttTopicValidator.IsValidTopic(topic))
+                if (!MqttTopicValidator.IsValidFilter(topic))
                     throw new InvalidDataException(
                         $"Invalid topic: {topic}");
             }

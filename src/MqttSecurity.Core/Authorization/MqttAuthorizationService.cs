@@ -1,5 +1,4 @@
 ﻿using MqttSecurity.Core.Contracts;
-using MqttSecurity.Core.Enums;
 
 namespace MqttSecurity.Core.Authorization;
 

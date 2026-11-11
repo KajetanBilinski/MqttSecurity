@@ -1,0 +1,25 @@
+[
+    {
+        "username": "device01",
+        "password": "test",
+        "permissions": {
+            "publish": [
+                "devices/01/status",
+                "devices/01/diagnostics/#"
+            ],
+            "subscribe": [
+                "devices/01/commands/#"
+            ]
+        }
+    },
+    {
+        "username": "monitoring",
+        "password": "test2",
+        "permissions": {
+            "publish": [],
+            "subscribe": [
+                "devices/#"
+            ]
+        }
+    }
+]

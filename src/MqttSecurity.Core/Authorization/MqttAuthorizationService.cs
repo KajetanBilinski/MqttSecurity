@@ -12,17 +12,18 @@ public class MqttAuthorizationService : IMqttAuthorizationService
         _userStore = userStore;
         _topicMatcher = mqttTopicMatcher;
     }
-    public bool CanPublish(string username, string topicFilter)
+    public bool CanPublish(string username, string topic)
     {
         if(string.IsNullOrWhiteSpace(username) ||
-            string.IsNullOrEmpty(topicFilter))
+            string.IsNullOrEmpty(topic))
             return false;
 
         var user = _userStore.GetUser(username);
 
         if (user is null) return false;
 
-        return user.Rules.Any(r => r.Action.HasFlag(MqttAction.Publish) && _topicMatcher.Matches(topicFilter, r.TopicFilter));
+        return user.Permissions.Publish.Any(filter =>
+            _topicMatcher.Matches(topic, filter));
     }
 
     public bool CanSubscribe(string username, string topicFilter)
@@ -35,7 +36,8 @@ public class MqttAuthorizationService : IMqttAuthorizationService
 
         if (user is null) return false;
 
-        return user.Rules.Any(r => r.Action.HasFlag(MqttAction.Subscribe) && _topicMatcher.CoversFilter(topicFilter, r.TopicFilter));
+        return user.Permissions.Subscribe.Any(filter =>
+             _topicMatcher.CoversFilter(filter, topicFilter));
     }
 
 }

@@ -6,6 +6,5 @@ public sealed class MqttUser
 {
     public required string Username { get; init; }
     public required string PasswordHash { get; init; }
-    public required bool Enabled { get; init; }
-    public ImmutableArray<MqttRule> Rules { get; init; } = [];
+    public MqttPermissions Permissions { get; init; } = new MqttPermissions();
 }

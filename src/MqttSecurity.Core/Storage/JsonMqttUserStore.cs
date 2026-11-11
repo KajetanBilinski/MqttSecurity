@@ -1,8 +1,6 @@
 ﻿using System.Collections.Immutable;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using MqttSecurity.Core.Contracts;
-using MqttSecurity.Core.Enums;
 using MqttSecurity.Core.Models;
 using MqttSecurity.Core.Validation;
 
@@ -10,10 +8,6 @@ namespace MqttSecurity.Core.Storage;
 
 public class JsonMqttUserStore : IMqttUserStore
 {
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter<MqttAction>() }
-    };
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
     private Dictionary<string, MqttUser> _users = new();
     private readonly string _filePath;
@@ -59,8 +53,7 @@ public class JsonMqttUserStore : IMqttUserStore
                 cancellationToken);
 
             var users = JsonSerializer.Deserialize<List<MqttUser>>(
-                json, Options);
-
+                json);
 
             if (users is null)
                 throw new InvalidDataException(

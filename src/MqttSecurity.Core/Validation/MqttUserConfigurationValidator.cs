@@ -27,19 +27,29 @@ public static class MqttUserConfigurationValidator
                 throw new InvalidDataException(
                     $"Missing password hash: {user.Username}");
 
-            if (user.Rules.Length == 0)
+            if (user.Permissions.Publish.Length == 0 && user.Permissions.Subscribe.Length == 0)
                 throw new InvalidDataException(
-                    $"Missing rules: {user.Username}");
+                    $"Missing permissions: {user.Username}");
 
-            foreach (var rule in user.Rules)
+            foreach (var topic in user.Permissions.Publish)
             {
-                if (rule is null)
+                if (topic is null)
                     throw new InvalidDataException(
-                        $"Null rule: {user.Username}");
+                        $"Null topic: {user.Username}");
 
-                if (!MqttTopicValidator.IsValidFilter(rule.TopicFilter))
+                if (!MqttTopicValidator.IsValidTopic(topic))
                     throw new InvalidDataException(
-                        $"Invalid topic filter: {rule.TopicFilter}");
+                        $"Invalid topic: {topic}");
+            }
+            foreach (var filter in user.Permissions.Subscribe)
+            {
+                if (filter is null)
+                    throw new InvalidDataException(
+                        $"Null topic: {user.Username}");
+
+                if (!MqttTopicValidator.IsValidFilter(filter))
+                    throw new InvalidDataException(
+                        $"Invalid topic filter: {filter}");
             }
         }
     }

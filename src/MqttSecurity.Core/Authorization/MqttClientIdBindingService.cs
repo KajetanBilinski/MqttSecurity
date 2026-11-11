@@ -1,4 +1,5 @@
 ﻿
+using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using MqttSecurity.Core.Configuration;
 using MqttSecurity.Core.Contracts;
@@ -21,6 +22,10 @@ public sealed class MqttClientIdBindingService : IMqttClientIdBindingService
     {
         _userStore = userStore;
         _options = options.Value;
+        if (_options.PendingLifetime <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                "PendingLifetime must be positive.");
     }
 
     public bool TryReserve(string username, string clientId, out Guid reservationId)
@@ -85,6 +90,15 @@ public sealed class MqttClientIdBindingService : IMqttClientIdBindingService
             if (!TryGetReservation(clientId, reservationId, out var reservation))
                 return false;
 
+            if (reservation.Confirmed)
+                return true;
+
+            if (IsExpired(reservation, DateTime.UtcNow))
+            {
+                _reservations.Remove(clientId);
+                return false;
+            }
+
             reservation.Confirmed = true;
             return true;
         }
@@ -103,10 +117,8 @@ public sealed class MqttClientIdBindingService : IMqttClientIdBindingService
     {
         lock (_lock)
         {
-            if (!TryGetReservation(clientId, reservationId, out _))
-                return;
-
-            _reservations.Remove(clientId);
+            if (TryGetReservation(clientId, reservationId, out _))
+                _reservations.Remove(clientId);
         }
     }
 
@@ -123,20 +135,30 @@ public sealed class MqttClientIdBindingService : IMqttClientIdBindingService
         return false;
     }
 
+    private bool IsExpired(Reservation reservation, DateTimeOffset now)
+    {
+        if (reservation.Confirmed)
+            return false;
+
+        return now - reservation.CreatedAt >=
+               _options.PendingLifetime;
+    }
+
     private void RemoveExpiredPending()
     {
-        var now = DateTimeOffset.UtcNow;
-        List<string>? expired = new();
+        var now = DateTime.UtcNow;
+        List<string>? expired = null;
 
         foreach (var (clientId, reservation) in _reservations)
         {
-            if (!reservation.Confirmed && now - reservation.CreatedAt >= _options.PendingLifetime)
+            if (IsExpired(reservation, now))
             {
+                expired ??= new();
                 expired.Add(clientId);
             }
         }
 
-        if (expired.Count == 0)
+        if (expired == null)
             return;
 
         foreach (var clientId in expired)

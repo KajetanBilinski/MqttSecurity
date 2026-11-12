@@ -42,6 +42,18 @@ public sealed class MqttSecurityHandler
                 return Task.CompletedTask;
             }
 
+            if (_options.EnableClientIdBinding)
+            {
+                if (context.CleanSession != true ||
+                    context.SessionExpiryInterval != 0)
+                {
+                    context.ReasonCode =
+                        MqttConnectReasonCode.NotAuthorized;
+
+                    return Task.CompletedTask;
+                }
+            }
+
             if (!_clientIdBinding.TryReserve(username, context.ClientId, out var reservationId))
             {
                 context.ReasonCode = MqttConnectReasonCode.NotAuthorized;

@@ -15,6 +15,11 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
 
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\MqttSecurity.Core\MqttSecurity.Core.csproj" />
+		<ProjectReference Include="..\..\src\MqttSecurity.MqttNet\MqttSecurity.MqttNet.csproj" />
+	</ItemGroup>
+
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>

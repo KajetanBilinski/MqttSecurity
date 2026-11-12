@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore MqttSecurity.slnx
+      - name: Build
+        run: dotnet build MqttSecurity.slnx --configuration Release --no-restore
+      - name: Test
+        run: dotnet test tests/MqttSecurity.Tests/MqttSecurity.Tests.csproj --configuration Release --no-build --no-restore --logger trx --collect "XPlat Code Coverage" --results-directory artifacts/test-results
+      - name: Pack
+        run: dotnet pack MqttSecurity.slnx --configuration Release --no-build --no-restore --output artifacts/packages
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.os }}
+          path: artifacts/test-results
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.os }}
+          path: artifacts/packages/*.nupkg
+          if-no-files-found: error
+          retention-days: 14

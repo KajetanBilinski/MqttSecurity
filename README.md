@@ -3,148 +3,128 @@
 [![CI](https://github.com/KajetanBilinski/MqttSecurity/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/KajetanBilinski/MqttSecurity/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Authentication, topic authorization and login protection for MQTTnet brokers, built with C# and .NET 10.
+A C# library for managing user accounts and topic permissions in an MQTTnet broker.
 
-**Status: preview.** The project is under development and its public API may change before 1.0. Packages are built as GitHub Actions artifacts; automatic NuGet publication is not configured.
+## Why I built it
 
-## Features
+While working with MQTTnet, I needed a way to manage accounts and control which topics each account could read from or write to. I started this project to solve that problem and to learn more about C# and MQTT security along the way.
 
-- Username/password authentication using ASP.NET Core Identity password hashing.
-- Separate publish and subscribe permissions with MQTT `+` and `#` filters.
-- Client ID allowlists and connection reservations.
-- Temporary account and IP blocks after failed login attempts.
-- JSON-backed user configuration with explicit reload support.
-- Dependency injection and MQTTnet server integration.
-- A command-line configuration generator and a runnable sample broker.
+#### IMPORTANT
+The library is still in development.
 
-## Repository structure
+## What it does
 
-| Directory | Purpose |
-| --- | --- |
-| `src/MqttSecurity.Core` | Authentication, authorization, configuration, storage and login protection |
-| `src/MqttSecurity.MqttNet` | MQTTnet server integration and DI registration |
-| `tools/MqttSecurity.ConfigGenerator` | Converts setup files containing passwords into hashed user configuration |
-| `samples/SampleBroker` | Local broker listening on `127.0.0.1:1883` |
-| `tests/MqttSecurity.Tests` | Unit tests and broker integration tests |
-| `.github/workflows` | CI and versioned package builds |
+- Checks the username and password when a client connects.
+- Stores password hashes instead of plain passwords in the broker's user file.
+- Lets each account have separate permissions for publishing and subscribing.
+- Checks which Client IDs an account can use.
+- Temporarily blocks accounts and IP addresses after too many failed logins.
+- Includes a tool for generating the user configuration and a sample broker.
 
-## Requirements
+For example, a device account can send messages to `devices/01/status` and receive commands from `devices/01/commands/#`. A separate monitoring account can read device messages without permission to publish them.
 
-- A stable .NET 10 SDK.
-- MQTTnet.Server `5.2.0.1603`, referenced by the integration project.
+## Try it locally
 
-`global.json` selects a stable SDK from the .NET 10.0 line. `Directory.Build.props` provides shared version and package metadata. Run the commands below from the repository root and explicitly target `MqttSecurity.slnx`.
+You need a .NET 10 SDK. Run these commands from the repository root.
 
-## Build and test
-
-```sh
-dotnet restore MqttSecurity.slnx
-dotnet build MqttSecurity.slnx --configuration Release --no-restore
-dotnet test tests/MqttSecurity.Tests/MqttSecurity.Tests.csproj --configuration Release --no-build --no-restore
-```
-
-Integration tests open local TCP sockets. The test environment must allow loopback connections.
-
-## Run the sample
-
-The tracked `users.setup.json` contains demonstration credentials only. Never use them in a deployment.
-
-Generate the sample's user configuration:
+First, generate the sample's user file:
 
 ```sh
 dotnet run --project tools/MqttSecurity.ConfigGenerator -- users.setup.json samples/SampleBroker/users.json
 ```
 
-The generator refuses to overwrite an existing output file. If one already exists, choose another output path or deliberately replace your local sample configuration.
+The generator reads usernames, passwords and permissions from `users.setup.json`. It creates `users.json` with password hashes, which the broker uses to check logins. It will not overwrite an existing output file.
 
-Start the broker:
+Then start the broker:
 
 ```sh
 dotnet run --project samples/SampleBroker
 ```
 
-Connect an MQTT client to `127.0.0.1:1883`, using a username and password from the setup file and a nonempty, unique Client ID. With Client ID binding enabled, use a clean session and a session expiry interval of zero. Press Enter in the broker console to stop it.
+Connect an MQTT client with these settings:
 
-The sample endpoint uses plain TCP. Configure TLS through MQTTnet before exposing a broker to a network.
+| Setting | Value |
+| --- | --- |
+| Server | `127.0.0.1` |
+| Port | `1883` |
+| Username and password | An account from `users.json` |
+| Client ID | Use an ID listed in `users.json`, or any nonempty ID if the list is empty. |
+| Clean session | Enabled |
+| Session expiry interval | `0` |
 
-## Use the library
+Press Enter in the broker console to stop it.
 
-Reference `src/MqttSecurity.MqttNet/MqttSecurity.MqttNet.csproj` from your broker application. It references Core transitively. Built `.nupkg` files are also available as workflow artifacts once CI has run successfully.
+The included passwords are examples for local testing. The sample does not encrypt the connection. For network use, configure TLS in MQTTnet and use your own credentials.
 
-```csharp
-using System.Net;
-using Microsoft.Extensions.DependencyInjection;
-using MQTTnet.Server;
-using MqttSecurity.Core.Extensions;
-using MqttSecurity.MqttNet.Extensions;
+## Accounts and permissions
 
-using var services = new ServiceCollection()
-    .AddMqttSecurity(options =>
-    {
-        options.UsersFilePath = Path.Combine(
-            AppContext.BaseDirectory, "users.json");
-        options.LoginProtection.MaxFailuresPerAccount = 5;
-        options.LoginProtection.MaxFailuresPerIpAddress = 20;
-    })
-    .BuildServiceProvider();
-
-var options = new MqttServerOptionsBuilder()
-    .WithDefaultEndpoint()
-    .WithDefaultEndpointBoundIPAddress(IPAddress.Loopback)
-    .WithDefaultEndpointBoundIPV6Address(IPAddress.None)
-    .WithDefaultEndpointPort(1883)
-    .Build();
-
-using var server = new MqttServerFactory().CreateMqttServer(options);
-await server.UseMqttSecurityAsync(services);
-await server.StartAsync();
-Console.ReadLine();
-await server.StopAsync();
-```
-
-`UseMqttSecurityAsync` loads and validates the user file before attaching handlers. Call it once, before starting the server.
-
-If the application needs additional connection checks, pass an asynchronous `additionalValidation` callback to `UseMqttSecurityAsync`. It runs after authentication and session checks, before Client ID reservation. Reject by setting `context.ReasonCode` to an appropriate failure code. Do not append connection validators after this integration: delays, rejections or exceptions there bypass the intended reservation lifecycle.
-
-## User configuration
-
-The setup file accepted by the generator has this structure:
+This is an example input for the configuration generator:
 
 ```json
 [
   {
     "username": "device01",
-    "password": "replace-with-a-unique-password",
+    "password": "replace-with-your-own-password",
     "permissions": {
-      "publish": ["devices/01/status", "devices/01/diagnostics/#"],
+      "publish": ["devices/01/status"],
       "subscribe": ["devices/01/commands/#"]
     }
   }
 ]
 ```
 
-The generated runtime file uses `passwordHash` instead of `password`, and includes a `clientIds` array. An empty `clientIds` array allows one reserved/active Client ID per account. A nonempty array restricts the account to the listed IDs, which may connect independently.
+This account can publish to `devices/01/status` and subscribe to topics under `devices/01/commands/`. The `#` allows the remaining topic levels, so `devices/01/commands/restart` fits this permission.
 
-The generator currently emits an empty Client ID list and does not accept an input allowlist. Configure explicit IDs in the generated runtime file if needed. At least one publish or subscribe permission is required by runtime validation.
+The generated file contains `passwordHash` instead of `password`. Keep real passwords and user configuration out of Git.
 
-`+` matches one topic level; `#` matches remaining levels. Subscription authorization checks whether an allowed filter covers the entire requested filter. Topics and filters starting with `$`, including shared-subscription syntax, are currently rejected.
+This is an example output for the configuration generator:
 
-Keep real setup files containing plaintext passwords out of Git. Treat password hashes as sensitive configuration too. Generated `users.json` files in the root and sample directory are ignored by Git.
+```json
+[
+  {
+    "username": "device01",
+    "passwordHash": "generated-hash",
+    "clientIds": [],
+    "permissions": {
+        "publish": ["devices/01/status"],
+        "subscribe": ["devices/01/commands/#"]
+    }
+  }
+]
+```
 
-## Default settings
+## Client IDs
 
-| Setting | Default |
-| --- | --- |
-| `UsersFilePath` | Required; no usable default |
-| `EnableClientIdBinding` | `true` |
-| `PendingLifetime` | 1 minute |
-| `LoginProtection.Enabled` | `true` |
-| `LoginProtection.MaxFailuresPerAccount` | 5 |
-| `LoginProtection.MaxFailuresPerIpAddress` | 20 |
-| `LoginProtection.FailureWindow` | 1 minute |
-| `LoginProtection.BlockDuration` | 2 minutes |
+A Client ID identifies an MQTT connection. It is separate from the username.
 
-Successful password authentication clears the account failure counter, but not the IP counter. Blocked attempts are rejected before password hash verification. State is local to one service instance and is lost on process restart.
+In the generated user file, an empty `clientIds` list means the account can have one reserved or active Client ID at a time. You can also edit this list to allow only specific IDs. Different IDs on that list can connect at the same time.
+
+The generator currently creates an empty list. It does not yet accept a Client ID list in its input.
+
+## Failed logins
+
+By default, the library blocks an account after 5 failed logins within one minute, or an IP address after 20. The block lasts two minutes.
+
+The account and IP limits are separate. A successful login clears the account's failed attempts, but not the IP's. The counters are kept in memory and reset when the broker process restarts.
+
+## Tests
+
+To build the project and run the tests:
+
+```sh
+dotnet build MqttSecurity.slnx --configuration Release
+dotnet test tests/MqttSecurity.Tests/MqttSecurity.Tests.csproj --configuration Release --no-build
+```
+
+The tests cover topic matching, Client ID rules and failed-login protection. Some tests start a local broker and connect MQTT clients to check their behavior together.
+
+## What still needs work
+
+- A connection that fails after reserving a Client ID can leave the account blocked.
+- Configuration validation and the generator need further improvements.
+- Changing permissions does not automatically remove existing subscriptions.
+
+A complete working example is in [SampleBroker](samples/SampleBroker/Program.cs).
 
 ## License
 

@@ -147,8 +147,9 @@ public sealed class MqttClientIdBindingIntegrationTests
                 expiry));
     }
 
+
     [Fact]
-    public async Task RejectedHandshake_PendingReservationExpires()
+    public async Task RejectedHandshake_BlocksAccountUntilReleased()
     {
         await using var broker = await TestBroker.StartAsync(
             [("device01", [])],
@@ -163,17 +164,23 @@ public sealed class MqttClientIdBindingIntegrationTests
         Assert.True(broker.Validating.TryGetValue(
             "broken", out var oldId));
 
-        Assert.False(broker.Binding.IsActive("broken", oldId));
-
         await Task.Delay(650);
 
         using var second = CreateClient();
 
-        await AssertConnectedAsync(second,
+        await AssertRejectedAsync(second,
             ClientOptions(broker.Port, "device01", "train-002"));
 
         Assert.False(broker.Binding.Confirm("broken", oldId));
+
+        broker.Binding.Release("broken", oldId);
+
+        using var third = CreateClient();
+
+        await AssertConnectedAsync(third,
+            ClientOptions(broker.Port, "device01", "train-002"));
     }
+
 
     private static IMqttClient CreateClient()
         => new MqttClientFactory().CreateMqttClient();

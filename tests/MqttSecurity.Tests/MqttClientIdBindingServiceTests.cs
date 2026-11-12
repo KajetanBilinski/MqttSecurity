@@ -325,8 +325,9 @@ public sealed class MqttClientIdBindingServiceTests
             "client-01", reservationId));
     }
 
+
     [Fact]
-    public async Task TryReserve_ExpiredPending_AllowsAnotherClient()
+    public async Task ExpiredPending_BlocksNewConnection_UntilReleased()
     {
         var sut = CreateService(
             [User("device01")],
@@ -337,15 +338,19 @@ public sealed class MqttClientIdBindingServiceTests
 
         await Task.Delay(300);
 
-        // RemoveExpiredPending usuwa poprzednią rezerwację.
+        Assert.False(sut.TryReserve(
+            "device01", "client-02", out _));
+
+        Assert.False(sut.Confirm("client-01", oldId));
+
+        sut.Release("client-01", oldId);
+
         Assert.True(sut.TryReserve(
             "device01", "client-02", out var newId));
 
-        Assert.NotEqual(oldId, newId);
-
-        Assert.True(sut.Confirm(
-            "client-02", newId));
+        Assert.True(sut.Confirm("client-02", newId));
     }
+
 
     [Fact]
     public async Task ActiveReservation_DoesNotExpire()

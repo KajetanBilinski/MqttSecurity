@@ -26,13 +26,13 @@ public static class MqttServerSecurityExtensions
         var authorization = services.GetRequiredService<IMqttAuthorizationService>();
 
         var clientIdBinding = services.GetRequiredService<IMqttClientIdBindingService>();
+
+        var loginProtection = services.GetRequiredService<IMqttLoginProtectionService>();
+
         var configuration = services.GetRequiredService<IOptions<MqttSecurityOptions>>();
 
-        var handler = new MqttSecurityHandler(
-            authentication,
-            authorization,
-            clientIdBinding,
-            configuration);
+        var handler = new MqttSecurityHandler(authentication,authorization,
+            clientIdBinding,loginProtection,configuration);
 
         handler.Attach(server);
     }

@@ -4,6 +4,7 @@ using MqttSecurity.Core.Authentication;
 using MqttSecurity.Core.Authorization;
 using MqttSecurity.Core.Configuration;
 using MqttSecurity.Core.Contracts;
+using MqttSecurity.Core.Protection;
 using MqttSecurity.Core.Storage;
 
 namespace MqttSecurity.Core.Extensions;
@@ -40,6 +41,10 @@ public static class MqttSecurityServiceCollectionExtensions
         services.AddSingleton<IMqttTopicMatcher, MqttTopicMatcher>();
 
         services.AddSingleton<IMqttClientIdBindingService,MqttClientIdBindingService>();
+
+        services.AddSingleton(TimeProvider.System);
+
+        services.AddSingleton<IMqttLoginProtectionService,MqttLoginProtectionService>();
 
         return services;
     }

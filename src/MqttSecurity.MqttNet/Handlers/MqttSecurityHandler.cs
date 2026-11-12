@@ -14,17 +14,21 @@ public sealed class MqttSecurityHandler
     private readonly IMqttAuthenticationService _authentication;
     private readonly IMqttAuthorizationService _authorization;
     private readonly IMqttClientIdBindingService _clientIdBinding;
+    private readonly IMqttLoginProtectionService _loginProtection;
     private readonly MqttSecurityOptions _options;
 
     public MqttSecurityHandler(
         IMqttAuthenticationService authentication,
         IMqttAuthorizationService authorization,
         IMqttClientIdBindingService clientIdBinding,
-        IOptions<MqttSecurityOptions> options)
+        IMqttLoginProtectionService loginProtection,
+        IOptions<MqttSecurityOptions> options
+        )
     {
         _authentication = authentication;
         _authorization = authorization;
         _clientIdBinding = clientIdBinding;
+        _loginProtection = loginProtection;
         _options = options.Value;
     }
 
@@ -34,21 +38,46 @@ public sealed class MqttSecurityHandler
         {
             var username = context.UserName;
             var password = context.Password;
+            var remoteEndpoint = context.ChannelAdapter.RemoteEndPoint as IPEndPoint;
 
-            if (string.IsNullOrEmpty(username) || password is null ||
+            if (remoteEndpoint == null)
+            {
+                context.ReasonCode = MqttConnectReasonCode.NotAuthorized;
+                return Task.CompletedTask;
+            }
+
+            var ipAddress = remoteEndpoint.Address;
+
+            if (username == null)
+            {
+                username = string.Empty;
+            }
+
+            if (!_loginProtection.Check(username, ipAddress).IsAllowed)
+            {
+                context.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
+
+                return Task.CompletedTask;
+            }
+
+
+
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrEmpty(password) ||
                 !_authentication.Authenticate(username, password))
             {
+                _loginProtection.RegisterFailure(username, ipAddress);
                 context.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
                 return Task.CompletedTask;
             }
+
+            _loginProtection.RegisterSuccess(username);
 
             if (_options.EnableClientIdBinding)
             {
                 if (context.CleanSession != true ||
                     context.SessionExpiryInterval != 0)
                 {
-                    context.ReasonCode =
-                        MqttConnectReasonCode.NotAuthorized;
+                    context.ReasonCode = MqttConnectReasonCode.NotAuthorized;
 
                     return Task.CompletedTask;
                 }
@@ -59,8 +88,7 @@ public sealed class MqttSecurityHandler
                 if (!_clientIdBinding.TryReserve(
                     username, context.ClientId, out var reservationId))
                 {
-                    context.ReasonCode =
-                        MqttConnectReasonCode.NotAuthorized;
+                    context.ReasonCode = MqttConnectReasonCode.NotAuthorized;
 
                     return Task.CompletedTask;
                 }

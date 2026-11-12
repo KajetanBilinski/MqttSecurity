@@ -208,7 +208,6 @@ public sealed class MqttLoginProtectionServiceTests
         return new MqttLoginProtectionService(options, clock);
     }
 
-    // Kontrolowany zegar: przesuwamy czas bez Thread.Sleep i Task.Delay.
     private sealed class TestClock : TimeProvider
     {
         private DateTimeOffset _now =

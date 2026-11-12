@@ -149,38 +149,124 @@ public sealed class MqttClientIdBindingIntegrationTests
 
 
     [Fact]
-    public async Task RejectedHandshake_BlocksAccountUntilReleased()
+    public async Task RejectedValidation_DoesNotReserveAccount_AllowsImmediateRetry()
     {
         await using var broker = await TestBroker.StartAsync(
             [("device01", [])],
-            pendingLifetime: TimeSpan.FromMilliseconds(300),
-            rejectAfterReservation: true);
+            pendingLifetime: TimeSpan.FromMinutes(1),
+            rejectAdditionalValidation: true);
 
         using var first = CreateClient();
 
-        await AssertRejectedAsync(first,
+        await AssertRejectedAsync(
+            first,
             ClientOptions(broker.Port, "device01", "broken"));
 
-        Assert.True(broker.Validating.TryGetValue(
-            "broken", out var oldId));
-
-        await Task.Delay(650);
+        Assert.False(broker.Validating.ContainsKey("broken"));
 
         using var second = CreateClient();
 
-        await AssertRejectedAsync(second,
+        await AssertConnectedAsync(
+            second,
             ClientOptions(broker.Port, "device01", "train-002"));
 
-        Assert.False(broker.Binding.Confirm("broken", oldId));
+        await broker.WaitUntilAsync(
+            () => broker.Connected.ContainsKey("train-002"));
 
-        broker.Binding.Release("broken", oldId);
+        Guid newId = broker.Connected["train-002"];
 
-        using var third = CreateClient();
-
-        await AssertConnectedAsync(third,
-            ClientOptions(broker.Port, "device01", "train-002"));
+        Assert.True(broker.Binding.IsActive("train-002", newId));
     }
 
+
+    [Fact]
+    public async Task AdditionalValidation_Throws_DoesNotLeaveReservation()
+    {
+        int attempt = 0;
+        await using var broker = await TestBroker.StartAsync(
+            [("device01", [])],
+            additionalValidation: context =>
+            {
+                if (Interlocked.Increment(ref attempt) == 1)
+                    throw new InvalidOperationException("Test validation failure.");
+
+                return Task.CompletedTask;
+            });
+
+        using var first = CreateClient();
+        using var second = CreateClient();
+
+        var error = await Record.ExceptionAsync(async () =>
+            await first.ConnectAsync(
+                ClientOptions(broker.Port, "device01", "shared-client"))
+                .WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.NotNull(error);
+        Assert.IsNotType<TimeoutException>(error);
+        Assert.False(first.IsConnected);
+        Assert.False(broker.Validating.ContainsKey("shared-client"));
+
+        await AssertConnectedAsync(second,
+            ClientOptions(broker.Port, "device01", "shared-client"));
+        await second.PingAsync().WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task DelayedValidation_CannotDisruptNewConnectionWithSameClientId()
+    {
+        var validationStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var resumeValidation = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        int validationCount = 0;
+
+        await using var broker = await TestBroker.StartAsync(
+            [("device01", [])],
+            pendingLifetime: TimeSpan.FromMilliseconds(300),
+            additionalValidation: async context =>
+            {
+                if (Interlocked.Increment(ref validationCount) != 1)
+                    return;
+
+                Assert.Empty(context.SessionItems.Values.OfType<Guid>());
+                validationStarted.SetResult();
+                await resumeValidation.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            });
+
+        using var first = CreateClient();
+        using var second = CreateClient();
+        var firstConnect = first.ConnectAsync(
+            ClientOptions(broker.Port, "device01", "shared-client"));
+
+        try
+        {
+            await validationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await Task.Delay(650);
+
+            await AssertConnectedAsync(second,
+                ClientOptions(broker.Port, "device01", "shared-client"));
+            await broker.WaitUntilAsync(() =>
+                broker.Connected.ContainsKey("shared-client"));
+            Guid newId = broker.Connected["shared-client"];
+
+            resumeValidation.TrySetResult();
+
+            var oldResult = await firstConnect.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(MqttClientConnectResultCode.NotAuthorized,
+                oldResult.ResultCode);
+            Assert.False(first.IsConnected);
+
+            Assert.True(broker.Binding.IsActive("shared-client", newId));
+            await second.PingAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(second.IsConnected);
+        }
+        finally
+        {
+            resumeValidation.TrySetResult();
+            await Record.ExceptionAsync(async () =>
+                await firstConnect.WaitAsync(TimeSpan.FromSeconds(5)));
+        }
+    }
 
     private static IMqttClient CreateClient()
         => new MqttClientFactory().CreateMqttClient();
@@ -260,7 +346,8 @@ public sealed class MqttClientIdBindingIntegrationTests
         public static async Task<TestBroker> StartAsync(
             (string Username, string[] ClientIds)[] users,
             TimeSpan? pendingLifetime = null,
-            bool rejectAfterReservation = false)
+            bool rejectAdditionalValidation = false,
+            Func<ValidatingConnectionEventArgs, Task>? additionalValidation = null)
         {
             var directory = Path.Combine(
                 Path.GetTempPath(),
@@ -316,21 +403,20 @@ public sealed class MqttClientIdBindingIntegrationTests
             var host = new TestBroker(
                 server, services, directory, port);
 
-            await server.UseMqttSecurityAsync(services);
-
-            if (rejectAfterReservation)
-            {
-                server.ValidatingConnectionAsync += context =>
+            await server.UseMqttSecurityAsync(
+                services,
+                additionalValidation: async context =>
                 {
-                    if (context.ClientId == "broken")
+                    if (additionalValidation != null)
+                        await additionalValidation(context);
+
+                    if (rejectAdditionalValidation && context.ClientId == "broken")
                     {
                         context.ReasonCode =
                             MqttConnectReasonCode.NotAuthorized;
                     }
 
-                    return Task.CompletedTask;
-                };
-            }
+                });
 
             server.ValidatingConnectionAsync += context =>
             {

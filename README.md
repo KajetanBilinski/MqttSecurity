@@ -146,30 +146,6 @@ Keep real setup files containing plaintext passwords out of Git. Treat password 
 
 Successful password authentication clears the account failure counter, but not the IP counter. Blocked attempts are rejected before password hash verification. State is local to one service instance and is lost on process restart.
 
-## Current limitations
-
-- Pending Client ID reservations can remain after transport failures that occur between reservation and completion of connection setup. Pending expiry marks reservations as expired; it does not independently release them. This lifecycle is not fully resolved.
-- Login protection is based on failures, not a strict limit on concurrent attempts. Counters do not have a hard entry-count limit.
-- IP limits use the remote socket address. Proxies and NAT can cause multiple devices to share one counter.
-- User reload is explicit through `IMqttUserStore.ReloadAsync`; there is no file watcher. Existing subscriptions are not automatically revoked when permissions change.
-- Persistent sessions are rejected when Client ID binding is enabled.
-- TLS is configured by the host application using MQTTnet; this library does not enable it automatically.
-
-## CI and versioned builds
-
-`CI` runs on pushes to `master`, pull requests and manual dispatch. On Windows and Linux it restores, builds, tests, collects coverage and creates the two library packages. Test results and packages are uploaded as Actions artifacts.
-
-`Release` runs for pushed tags beginning with `v`. It validates the version and verifies that the tagged commit belongs to `master`, then builds, tests and creates versioned packages. It does not publish to NuGet or automatically create a GitHub Release.
-
-For example, after merging and validating a commit:
-
-```sh
-git tag v0.1.0-preview.1
-git push origin v0.1.0-preview.1
-```
-
-Download packages from the successful workflow run under **Actions → Release → Artifacts**. No publication secrets are required.
-
 ## License
 
 [MIT](LICENSE).

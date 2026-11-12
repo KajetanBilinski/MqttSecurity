@@ -41,7 +41,7 @@ public sealed class MqttClientIdBindingService : IMqttClientIdBindingService
 
         lock (_lock)
         {
-            RemoveExpiredPending();
+            MarkExpiredPending();
 
             var user = _userStore.GetUser(username);
 
@@ -87,17 +87,19 @@ public sealed class MqttClientIdBindingService : IMqttClientIdBindingService
     {
         lock (_lock)
         {
-            if (!TryGetReservation(clientId, reservationId, out var reservation))
+            if (!TryGetReservation(
+                clientId, reservationId, out var reservation))
                 return false;
+
+            if (reservation.Expired ||
+                IsExpired(reservation, DateTimeOffset.UtcNow))
+            {
+                reservation.Expired = true;
+                return false;
+            }
 
             if (reservation.Confirmed)
                 return true;
-
-            if (IsExpired(reservation, DateTime.UtcNow))
-            {
-                _reservations.Remove(clientId);
-                return false;
-            }
 
             reservation.Confirmed = true;
             return true;
@@ -144,24 +146,14 @@ public sealed class MqttClientIdBindingService : IMqttClientIdBindingService
                _options.PendingLifetime;
     }
 
-    private void RemoveExpiredPending()
+    private void MarkExpiredPending()
     {
-        var now = DateTime.UtcNow;
-        List<string>? expired = null;
+        var now = DateTimeOffset.UtcNow;
 
-        foreach (var (clientId, reservation) in _reservations)
+        foreach (var reservation in _reservations.Values)
         {
             if (IsExpired(reservation, now))
-            {
-                expired ??= new();
-                expired.Add(clientId);
-            }
+                reservation.Expired = true;
         }
-
-        if (expired == null)
-            return;
-
-        foreach (var clientId in expired)
-            _reservations.Remove(clientId);
     }
 }

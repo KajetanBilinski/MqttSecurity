@@ -5,6 +5,7 @@ public sealed class Reservation
     public string Username { get; }
     public DateTimeOffset CreatedAt { get; }
     public bool Confirmed { get; set; }
+    public bool Expired { get; set; }
     public Reservation(Guid id, string username, DateTimeOffset createdAt)
     {
         Id = id;

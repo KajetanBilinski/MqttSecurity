@@ -54,14 +54,27 @@ public sealed class MqttSecurityHandler
                 }
             }
 
-            if (!_clientIdBinding.TryReserve(username, context.ClientId, out var reservationId))
-            {
-                context.ReasonCode = MqttConnectReasonCode.NotAuthorized;
-                return Task.CompletedTask;
-            }
-
             if (_options.EnableClientIdBinding)
-                context.SessionItems[ReservationKey] = reservationId;
+            {
+                if (!_clientIdBinding.TryReserve(
+                    username, context.ClientId, out var reservationId))
+                {
+                    context.ReasonCode =
+                        MqttConnectReasonCode.NotAuthorized;
+
+                    return Task.CompletedTask;
+                }
+
+                try
+                {
+                    context.SessionItems[ReservationKey] = reservationId;
+                }
+                catch
+                {
+                    _clientIdBinding.Release(context.ClientId, reservationId);
+                    throw;
+                }
+            }
 
             return Task.CompletedTask;
         };

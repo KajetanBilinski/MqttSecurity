@@ -12,7 +12,8 @@ public static class MqttServerSecurityExtensions
     public static async Task UseMqttSecurityAsync(
         this MqttServer server,
         IServiceProvider services,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Func<ValidatingConnectionEventArgs, Task>? additionalValidation = null)
     {
         ArgumentNullException.ThrowIfNull(server);
         ArgumentNullException.ThrowIfNull(services);
@@ -31,8 +32,13 @@ public static class MqttServerSecurityExtensions
 
         var configuration = services.GetRequiredService<IOptions<MqttSecurityOptions>>();
 
-        var handler = new MqttSecurityHandler(authentication,authorization,
-            clientIdBinding,loginProtection,configuration);
+        var handler = new MqttSecurityHandler(
+            authentication,
+            authorization,
+            clientIdBinding,
+            loginProtection,
+            configuration,
+            additionalValidation);
 
         handler.Attach(server);
     }

@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Net;
 using Microsoft.Extensions.Options;
+using MQTTnet.Adapter;
 using MQTTnet.Protocol;
 using MQTTnet.Server;
 using MqttSecurity.Core.Configuration;
@@ -11,31 +12,37 @@ namespace MqttSecurity.MqttNet.Handlers;
 public sealed class MqttSecurityHandler
 {
     private static readonly object ReservationKey = new();
+    private static readonly object ConnectionKey = new();
     private readonly IMqttAuthenticationService _authentication;
     private readonly IMqttAuthorizationService _authorization;
     private readonly IMqttClientIdBindingService _clientIdBinding;
     private readonly IMqttLoginProtectionService _loginProtection;
     private readonly MqttSecurityOptions _options;
+    private readonly Func<ValidatingConnectionEventArgs, Task>? _additionalValidation;
 
     public MqttSecurityHandler(
         IMqttAuthenticationService authentication,
         IMqttAuthorizationService authorization,
         IMqttClientIdBindingService clientIdBinding,
         IMqttLoginProtectionService loginProtection,
-        IOptions<MqttSecurityOptions> options
-        )
+        IOptions<MqttSecurityOptions> options,
+        Func<ValidatingConnectionEventArgs, Task>? additionalValidation = null)
     {
         _authentication = authentication;
         _authorization = authorization;
         _clientIdBinding = clientIdBinding;
         _loginProtection = loginProtection;
         _options = options.Value;
+        _additionalValidation = additionalValidation;
     }
 
     public void Attach(MqttServer server)
     {
-        server.ValidatingConnectionAsync += context =>
+        server.ValidatingConnectionAsync += async context =>
         {
+            if (context.ReasonCode != MqttConnectReasonCode.Success)
+                return;
+
             var username = context.UserName;
             var password = context.Password;
             var remoteEndpoint = context.ChannelAdapter.RemoteEndPoint as IPEndPoint;
@@ -43,7 +50,7 @@ public sealed class MqttSecurityHandler
             if (remoteEndpoint == null)
             {
                 context.ReasonCode = MqttConnectReasonCode.NotAuthorized;
-                return Task.CompletedTask;
+                return;
             }
 
             var ipAddress = remoteEndpoint.Address;
@@ -57,7 +64,7 @@ public sealed class MqttSecurityHandler
             {
                 context.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
 
-                return Task.CompletedTask;
+                return;
             }
 
 
@@ -67,7 +74,7 @@ public sealed class MqttSecurityHandler
             {
                 _loginProtection.RegisterFailure(username, ipAddress);
                 context.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
-                return Task.CompletedTask;
+                return;
             }
 
             _loginProtection.RegisterSuccess(username);
@@ -79,9 +86,17 @@ public sealed class MqttSecurityHandler
                 {
                     context.ReasonCode = MqttConnectReasonCode.NotAuthorized;
 
-                    return Task.CompletedTask;
+                    return;
                 }
             }
+
+            if (_additionalValidation != null)
+                await _additionalValidation(context);
+
+            if (context.ReasonCode != MqttConnectReasonCode.Success)
+                return;
+
+            context.CancellationToken.ThrowIfCancellationRequested();
 
             if (_options.EnableClientIdBinding)
             {
@@ -90,12 +105,13 @@ public sealed class MqttSecurityHandler
                 {
                     context.ReasonCode = MqttConnectReasonCode.NotAuthorized;
 
-                    return Task.CompletedTask;
+                    return;
                 }
 
                 try
                 {
                     context.SessionItems[ReservationKey] = reservationId;
+                    context.SessionItems[ConnectionKey] = context.ChannelAdapter;
                 }
                 catch
                 {
@@ -104,7 +120,6 @@ public sealed class MqttSecurityHandler
                 }
             }
 
-            return Task.CompletedTask;
         };
 
         server.ClientConnectedAsync += async context =>
@@ -115,8 +130,10 @@ public sealed class MqttSecurityHandler
             if (!TryGetReservationId(context.SessionItems, out var reservationId) ||
                 !_clientIdBinding.Confirm(context.ClientId, reservationId))
             {
-                await server.DisconnectClientAsync(
-                    context.ClientId,MqttDisconnectReasonCode.NotAuthorized);
+                var connection = context.SessionItems[ConnectionKey]
+                    as IMqttChannelAdapter;
+                if (connection != null)
+                    await connection.DisconnectAsync(CancellationToken.None);
             }
         };
 
